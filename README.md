@@ -111,3 +111,5 @@ To run the bot, you must create a Discord Bot Application:
 - **Asynchronous Execution**: Audio merging and Whisper transcription run in a separate thread pool (`loop.run_in_executor`) to prevent blocking the Discord WebSocket heartbeat, avoiding disconnects during long transcriptions.
 
 <!-- Draft initialized on July 14 -->
+
+<!-- Added Architecture details on July 14 -->
