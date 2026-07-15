@@ -113,3 +113,5 @@ To run the bot, you must create a Discord Bot Application:
 <!-- Draft initialized on July 14 -->
 
 <!-- Added Architecture details on July 14 -->
+
+<!-- Added installation notes on July 15 -->
