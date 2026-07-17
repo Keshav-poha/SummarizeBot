@@ -119,3 +119,5 @@ To run the bot, you must create a Discord Bot Application:
 <!-- Added whisper model notes on July 15 -->
 
 <!-- Updated virtualenv info on July 16 -->
+
+<!-- Fixed typos on July 17 -->
