@@ -123,3 +123,5 @@ To run the bot, you must create a Discord Bot Application:
 <!-- Fixed typos on July 17 -->
 
 <!-- Added MPS tip on July 17 -->
+
+<!-- Documented slash commands on July 18 -->
