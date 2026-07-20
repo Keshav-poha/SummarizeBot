@@ -23,7 +23,7 @@ echo -e "\n${CYAN}⚙️ Installing system dependencies (ffmpeg, python3, pip, v
 echo -e "${YELLOW}Note: This requires sudo privileges. You may be prompted for your password.${NC}"
 
 sudo apt-get update
-sudo apt-get install -y ffmpeg python3 python3-pip python3-venv git
+sudo apt-get install -y ffmpeg python3 python3-pip python3-venv git libffi-dev libnacl-dev build-essential
 
 if [ $? -ne 0 ]; then
     echo -e "${RED}❌ Error: Failed to install system dependencies.${NC}"

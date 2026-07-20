@@ -13,6 +13,7 @@ config.validate_config()
 # Configure Discord bot gateway intents
 intents = discord.Intents.default()
 intents.message_content = True
+intents.voice_states = True  # Explicitly enable voice states tracking
 bot = discord.Bot(intents=intents)
 
 # Keep track of active recording sessions
