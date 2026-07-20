@@ -129,3 +129,5 @@ To run the bot, you must create a Discord Bot Application:
 <!-- Developer Portal guide added on July 19 -->
 
 <!-- Clarified privacy notice on July 19 -->
+
+<!-- Refined markdown format on July 20 -->
