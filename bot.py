@@ -127,12 +127,18 @@ async def join(ctx: discord.ApplicationContext):
         await ctx.respond("❌ You must be in a voice channel to use this command!")
         return
         
+    # Defer interaction to prevent Discord 3-second timeout
+    await ctx.defer()
+        
     channel = ctx.author.voice.channel
-    if ctx.voice_client:
-        await ctx.voice_client.move_to(channel)
-    else:
-        await channel.connect()
-    await ctx.respond(f"✅ Joined **{channel.name}**")
+    try:
+        if ctx.voice_client:
+            await ctx.voice_client.move_to(channel)
+        else:
+            await channel.connect()
+        await ctx.respond(f"✅ Joined **{channel.name}**")
+    except Exception as e:
+        await ctx.respond(f"❌ Failed to join voice channel: {e}")
 
 @bot.slash_command(name="record", description="Start recording the voice channel.")
 async def record(ctx: discord.ApplicationContext):
@@ -140,31 +146,37 @@ async def record(ctx: discord.ApplicationContext):
         await ctx.respond("❌ You must be in a voice channel to start recording!")
         return
         
+    # Defer interaction to prevent Discord 3-second timeout
+    await ctx.defer()
+        
     # Connect to the voice channel if not already connected
     vc = ctx.voice_client
-    if not vc:
-        vc = await ctx.author.voice.channel.connect()
+    try:
+        if not vc:
+            vc = await ctx.author.voice.channel.connect()
+            
+        if vc.recording:
+            await ctx.respond("⚠️ Already recording in this voice channel.")
+            return
+            
+        # Store the session start time
+        recording_sessions[ctx.guild.id] = (vc, time.time())
         
-    if vc.recording:
-        await ctx.respond("⚠️ Already recording in this voice channel.")
-        return
+        # Start recording (Using WaveSink as it's the most stable format)
+        vc.start_recording(
+            discord.sinks.WaveSink(),
+            once_done,
+            ctx.channel
+        )
         
-    # Send a response explaining recording has started and notifying users (privacy)
-    await ctx.respond(
-        "🎙️ **Started recording!**\n"
-        "⚠️ *Disclaimer: By remaining in this voice channel, you consent to being recorded and transcribed. "
-        "The transcript and audio will be posted in this chat channel when the recording is stopped.*"
-    )
-    
-    # Store the session start time
-    recording_sessions[ctx.guild.id] = (vc, time.time())
-    
-    # Start recording (Using WaveSink as it's the most stable format)
-    vc.start_recording(
-        discord.sinks.WaveSink(),
-        once_done,
-        ctx.channel
-    )
+        # Send a response explaining recording has started and notifying users (privacy)
+        await ctx.respond(
+            "🎙️ **Started recording!**\n"
+            "⚠️ *Disclaimer: By remaining in this voice channel, you consent to being recorded and transcribed. "
+            "The transcript and audio will be posted in this chat channel when the recording is stopped.*"
+        )
+    except Exception as e:
+        await ctx.respond(f"❌ Failed to start recording: {e}")
 
 @bot.slash_command(name="stop", description="Stop recording, save audio, and generate transcript.")
 async def stop(ctx: discord.ApplicationContext):
@@ -173,6 +185,8 @@ async def stop(ctx: discord.ApplicationContext):
         await ctx.respond("❌ The bot is not currently recording in this server.")
         return
         
+    # Defer interaction immediately to prevent timeout
+    await ctx.defer()
     await ctx.respond("⏳ Stopping the recording and beginning audio transcription. Please wait...")
     vc.stop_recording()
 
@@ -183,12 +197,18 @@ async def leave(ctx: discord.ApplicationContext):
         await ctx.respond("❌ The bot is not connected to a voice channel.")
         return
         
+    # Defer interaction immediately to prevent timeout
+    await ctx.defer()
+    
     # Stop recording first if active
     if vc.recording:
         vc.stop_recording()
         
-    await vc.disconnect()
-    await ctx.respond("🚪 Disconnected from the voice channel.")
+    try:
+        await vc.disconnect()
+        await ctx.respond("🚪 Disconnected from the voice channel.")
+    except Exception as e:
+        await ctx.respond(f"❌ Failed to disconnect: {e}")
 
 if __name__ == "__main__":
     if config.DISCORD_TOKEN:

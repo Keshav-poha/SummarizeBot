@@ -71,7 +71,8 @@ echo -e "\n${CYAN}📦 Setting up Python virtual environment and dependencies...
 python3 -m venv venv
 source venv/bin/activate
 pip install --upgrade pip
-pip install -r requirements.txt
+pip install "setuptools<82.0.0" wheel
+pip install --no-build-isolation -r requirements.txt
 
 # 4. Print Bot Invite Link
 echo -e "\n${GREEN}${BOLD}🎉 Bot Setup is Complete!${NC}"
