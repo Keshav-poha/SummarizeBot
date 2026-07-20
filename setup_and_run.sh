@@ -9,35 +9,30 @@ NC='\033[0m' # No Color
 BOLD='\033[1m'
 
 echo -e "${CYAN}${BOLD}====================================================${NC}"
-echo -e "${CYAN}${BOLD}    SummarizeBot macOS Auto-Setup & Runner Script   ${NC}"
+echo -e "${CYAN}${BOLD}    SummarizeBot Hetzner Linux Setup & Runner       ${NC}"
 echo -e "${CYAN}${BOLD}====================================================${NC}"
 
-# 1. Check for Homebrew
-if ! command -v brew &> /dev/null; then
-    echo -e "${YELLOW}⚠️  Homebrew not found. It is required to install FFmpeg.${NC}"
-    echo -e "Installing Homebrew... (this may prompt for your macOS password)"
-    /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-else
-    echo -e "${GREEN}✓ Homebrew is installed.${NC}"
+# Ensure script is run on Debian/Ubuntu based system
+if ! command -v apt-get &> /dev/null; then
+    echo -e "${RED}❌ Error: This setup script requires a Debian/Ubuntu-based Linux distribution (standard for Hetzner Box).${NC}"
+    exit 1
 fi
 
-# 2. Check and Install FFmpeg
-if ! command -v ffmpeg &> /dev/null; then
-    echo -e "${YELLOW}Installing FFmpeg via Homebrew...${NC}"
-    brew install ffmpeg
-else
-    echo -e "${GREEN}✓ FFmpeg is already installed.${NC}"
-fi
+# 1. Update package index and install system dependencies
+echo -e "\n${CYAN}⚙️ Installing system dependencies (ffmpeg, python3, pip, venv, git)...${NC}"
+echo -e "${YELLOW}Note: This requires sudo privileges. You may be prompted for your password.${NC}"
 
-# 3. Check for Python 3
-if ! command -v python3 &> /dev/null; then
-    echo -e "${RED}❌ Python 3 is not installed. Please install it using: brew install python${NC}"
+sudo apt-get update
+sudo apt-get install -y ffmpeg python3 python3-pip python3-venv git
+
+if [ $? -ne 0 ]; then
+    echo -e "${RED}❌ Error: Failed to install system dependencies.${NC}"
     exit 1
 else
-    echo -e "${GREEN}✓ Python 3 is installed.${NC}"
+    echo -e "${GREEN}✓ System dependencies installed successfully.${NC}"
 fi
 
-# 4. Create and Configure .env
+# 2. Create and Configure .env
 APP_ID="1528738174665494590"
 PUBLIC_KEY="699174d8807f9eb18524726987435a4f30da272a954e4985bd575997711fbe8a"
 ENV_FILE=".env"
@@ -71,19 +66,19 @@ else
     echo -e "${GREEN}✓ Existing .env configuration loaded.${NC}"
 fi
 
-# 5. Build Virtual Environment and Install Requirements
+# 3. Build Virtual Environment and Install Requirements
 echo -e "\n${CYAN}📦 Setting up Python virtual environment and dependencies...${NC}"
 python3 -m venv venv
 source venv/bin/activate
 pip install --upgrade pip
 pip install -r requirements.txt
 
-# 6. Print Bot Invite Link
+# 4. Print Bot Invite Link
 echo -e "\n${GREEN}${BOLD}🎉 Bot Setup is Complete!${NC}"
 echo -e "${CYAN}Use this link to invite your bot to your Discord server:${NC}"
 echo -e "${YELLOW}${BOLD}https://discord.com/oauth2/authorize?client_id=${APP_ID}&permissions=3180544&scope=bot%20applications.commands${NC}"
 echo -e "${CYAN}Make sure to enable 'Guild Members' and 'Message Content' Gateway Intents in the Developer Portal!${NC}\n"
 
-# 7. Start the Bot
+# 5. Start the Bot
 echo -e "${GREEN}🤖 Starting SummarizeBot... (Press Ctrl+C to stop)${NC}\n"
 python bot.py
