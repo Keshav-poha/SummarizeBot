@@ -1,5 +1,7 @@
 # Discord Voice Recording & Local Transcription Bot
 
+*Last updated recently.*
+
 A modular, python-based Discord bot tailored for Linux VPS boxes (such as **Contabo**, **Hetzner**, **DigitalOcean**, or **AWS EC2** running Ubuntu/Debian). It joins voice channels, records multi-user conversations, overlays speaker streams, and transcribes speech locally using OpenAI's Whisper model (100% private, free, and self-hosted).
 
 ---
