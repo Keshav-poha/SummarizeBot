@@ -155,10 +155,25 @@ async def on_ready():
     print("Slash commands registered successfully. Ready to record!")
 
 class DebugVoiceClient(discord.VoiceClient):
-    """Custom VoiceClient subclass that prevents null endpoints from overwriting valid endpoints."""
+    """Custom VoiceClient subclass that guarantees valid endpoints and cleans :8443 suffixes."""
     async def disconnect(self, *, force: bool = False) -> None:
         print(f"⚠️ DebugVoiceClient: disconnect() triggered (force={force})!")
         await super().disconnect(force=force)
+
+    async def connect_websocket(self):
+        """Ensures endpoint is valid before attempting websocket connection."""
+        print(f"🔌 DebugVoiceClient: preparing websocket for endpoint='{getattr(self, 'endpoint', None)}'")
+        # Wait up to 5s for endpoint to be populated by gateway
+        for _ in range(50):
+            if hasattr(self, 'endpoint') and self.endpoint and isinstance(self.endpoint, str) and self.endpoint.strip():
+                break
+            await asyncio.sleep(0.1)
+
+        if hasattr(self, 'endpoint') and self.endpoint:
+            self.endpoint = self.endpoint.replace(':8443', '').strip()
+            print(f"🌐 Connecting to voice websocket at: wss://{self.endpoint}/?v=4")
+
+        return await super().connect_websocket()
 
     async def on_voice_state_update(self, data) -> None:
         print(f"🔊 DebugVoiceClient: voice_state_update payload: {data}")
@@ -166,22 +181,12 @@ class DebugVoiceClient(discord.VoiceClient):
 
     async def on_voice_server_update(self, data) -> None:
         print(f"🔊 DebugVoiceClient: raw voice_server_update payload: {data}")
-        if not data or not isinstance(data, dict):
-            return
-            
-        ep = data.get('endpoint')
-        # If Discord sends a null/empty endpoint but we already have a valid endpoint, retain current endpoint
-        if not ep or not isinstance(ep, str) or not ep.strip():
-            if hasattr(self, 'endpoint') and self.endpoint:
-                print(f"⚠️ Retaining existing valid endpoint '{self.endpoint}' against null payload update.")
-                data['endpoint'] = self.endpoint
-            else:
-                print("⚠️ Ignoring voice_server_update payload with null/empty endpoint...")
-                return
-
-        clean_ep = data['endpoint'].replace(':8443', '').strip()
-        print(f"🔧 Valid voice endpoint set: '{clean_ep}'")
-        data['endpoint'] = clean_ep
+        if data and isinstance(data, dict):
+            ep = data.get('endpoint')
+            if ep and isinstance(ep, str) and ep.strip():
+                clean_ep = ep.replace(':8443', '').strip()
+                data['endpoint'] = clean_ep
+                print(f"🔧 Cleaned voice_server_update endpoint: '{ep}' -> '{clean_ep}'")
         await super().on_voice_server_update(data)
 
 @bot.event
