@@ -154,6 +154,10 @@ class RecordingSink(discord.sinks.WaveSink):
     an empty dict means no custom event handlers (the sink uses write() as usual).
     """
     __sink_listeners__ = {}
+    children = []
+
+    def walk_children(self):
+        yield from []
 
 class DiscordVoiceClient(_VoiceClientBase):
     """
