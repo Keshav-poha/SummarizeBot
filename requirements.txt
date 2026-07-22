@@ -1,4 +1,4 @@
-py-cord[voice]==2.6.1
+py-cord[voice]>=2.8.0
 openai-whisper==20231117
 pydub==0.25.1
 python-dotenv==1.0.1
