@@ -119,9 +119,26 @@ async def once_done(sink: discord.sinks.Sink, channel: discord.TextChannel):
     except Exception:
         pass
 
+def format_error(e: Exception) -> str:
+    """Formats exceptions nicely even when str(e) is empty (e.g. asyncio.TimeoutError)."""
+    err_str = str(e).strip()
+    err_type = type(e).__name__
+    if not err_str:
+        if isinstance(e, asyncio.TimeoutError):
+            return f"{err_type}: Connection timed out waiting for Discord voice server. Make sure 'Voice States' intent is enabled in Developer Portal and the bot has 'Connect' & 'Speak' permissions."
+        return f"{err_type}: Connection failed."
+    return f"{err_type}: {err_str}"
+
 @bot.event
 async def on_ready():
     print(f"🤖 Bot is online as {bot.user} (ID: {bot.user.id})")
+    
+    # Ensure PyNaCl is loaded for voice encryption
+    try:
+        import nacl.secret
+        print("🔐 PyNaCl voice encryption library loaded successfully.")
+    except Exception as e:
+        print(f"❌ Error: PyNaCl library failed to load: {e}")
     
     # Ensure Opus audio library is loaded on Linux environments
     if not discord.opus.is_loaded():
@@ -151,13 +168,23 @@ async def join(ctx: discord.ApplicationContext):
     channel = ctx.author.voice.channel
     try:
         if ctx.voice_client:
-            await ctx.voice_client.move_to(channel)
-        else:
-            await channel.connect()
+            try:
+                await ctx.voice_client.disconnect(force=True)
+            except Exception:
+                pass
+        
+        # Clear any stale/ghost voice connections from previous crashes or restarts
+        try:
+            await ctx.guild.change_voice_state(channel=None)
+            await asyncio.sleep(0.5)
+        except Exception:
+            pass
+            
+        await channel.connect(timeout=30.0, reconnect=True)
         await ctx.respond(f"✅ Joined **{channel.name}**")
     except Exception as e:
         traceback.print_exc()
-        await ctx.respond(f"❌ Failed to join voice channel: {e}")
+        await ctx.respond(f"❌ Failed to join voice channel: {format_error(e)}")
 
 @bot.slash_command(name="record", description="Start recording the voice channel.")
 async def record(ctx: discord.ApplicationContext):
@@ -172,7 +199,13 @@ async def record(ctx: discord.ApplicationContext):
     vc = ctx.voice_client
     try:
         if not vc:
-            vc = await ctx.author.voice.channel.connect()
+            # Clear any stale/ghost voice state before connecting
+            try:
+                await ctx.guild.change_voice_state(channel=None)
+                await asyncio.sleep(0.5)
+            except Exception:
+                pass
+            vc = await ctx.author.voice.channel.connect(timeout=30.0, reconnect=True)
             
         if vc.recording:
             await ctx.respond("⚠️ Already recording in this voice channel.")
@@ -196,7 +229,7 @@ async def record(ctx: discord.ApplicationContext):
         )
     except Exception as e:
         traceback.print_exc()
-        await ctx.respond(f"❌ Failed to start recording: {e}")
+        await ctx.respond(f"❌ Failed to start recording: {format_error(e)}")
 
 @bot.slash_command(name="stop", description="Stop recording, save audio, and generate transcript.")
 async def stop(ctx: discord.ApplicationContext):
@@ -212,24 +245,24 @@ async def stop(ctx: discord.ApplicationContext):
 
 @bot.slash_command(name="leave", description="Disconnect the bot from the voice channel.")
 async def leave(ctx: discord.ApplicationContext):
-    vc = ctx.voice_client
-    if not vc:
-        await ctx.respond("❌ The bot is not connected to a voice channel.")
-        return
-        
     # Defer interaction immediately to prevent timeout
     await ctx.defer()
-    
-    # Stop recording first if active
-    if vc.recording:
-        vc.stop_recording()
+
+    vc = ctx.voice_client
+    if vc:
+        if vc.recording:
+            vc.stop_recording()
+        try:
+            await vc.disconnect(force=True)
+        except Exception:
+            pass
         
     try:
-        await vc.disconnect()
+        await ctx.guild.change_voice_state(channel=None)
         await ctx.respond("🚪 Disconnected from the voice channel.")
     except Exception as e:
         traceback.print_exc()
-        await ctx.respond(f"❌ Failed to disconnect: {e}")
+        await ctx.respond(f"❌ Failed to disconnect: {format_error(e)}")
 
 if __name__ == "__main__":
     if config.DISCORD_TOKEN:
