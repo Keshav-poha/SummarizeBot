@@ -196,7 +196,7 @@ async def join(ctx: discord.ApplicationContext):
             pass
             
         print(f"🔄 Attempting to connect to voice channel: {channel.name} (Guild: {channel.guild.name})...")
-        vc = await channel.connect(timeout=60.0, reconnect=True, self_deaf=True)
+        vc = await channel.connect(timeout=60.0, reconnect=True)
         print(f"✅ Connected to voice channel {channel.name} successfully!")
         await ctx.respond(f"✅ Joined **{channel.name}**")
     except Exception as e:
@@ -233,7 +233,7 @@ async def record(ctx: discord.ApplicationContext):
             except Exception:
                 pass
             print(f"🔄 Attempting voice connection for recording: {channel.name}...")
-            vc = await channel.connect(timeout=60.0, reconnect=True, self_deaf=True)
+            vc = await channel.connect(timeout=60.0, reconnect=True)
             print(f"✅ Voice connected for recording: {channel.name}")
             
         if not vc or not vc.is_connected():
