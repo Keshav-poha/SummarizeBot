@@ -294,8 +294,9 @@ async def record(ctx: discord.ApplicationContext):
         def recording_finished(exception):
             """Closure callback — captures sink, channel, guild_id from enclosing scope."""
             if exception:
-                print(f"❌ Recording error: {exception}", flush=True)
-                traceback.print_exc()
+                print(f"❌ Recording error: {repr(exception)}", flush=True)
+                if hasattr(exception, '__traceback__'):
+                    traceback.print_exception(type(exception), exception, exception.__traceback__)
             
             session = recording_sessions.pop(guild_id, None)
             duration_str = "Unknown duration"
