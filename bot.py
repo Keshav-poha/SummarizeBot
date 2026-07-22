@@ -155,7 +155,7 @@ async def on_ready():
     print("Slash commands registered successfully. Ready to record!")
 
 class DebugVoiceClient(discord.VoiceClient):
-    """Custom VoiceClient subclass that fixes Discord null endpoint bug & port suffix."""
+    """Custom VoiceClient subclass that prevents null endpoints from overwriting valid endpoints."""
     async def disconnect(self, *, force: bool = False) -> None:
         print(f"⚠️ DebugVoiceClient: disconnect() triggered (force={force})!")
         await super().disconnect(force=force)
@@ -170,12 +170,17 @@ class DebugVoiceClient(discord.VoiceClient):
             return
             
         ep = data.get('endpoint')
+        # If Discord sends a null/empty endpoint but we already have a valid endpoint, retain current endpoint
         if not ep or not isinstance(ep, str) or not ep.strip():
-            print("⚠️ Ignoring voice_server_update payload with null/empty endpoint...")
-            return  # Wait for payload with valid endpoint string before completing handshake
-            
-        clean_ep = ep.replace(':8443', '').strip()
-        print(f"🔧 Valid voice endpoint received: '{ep}' -> '{clean_ep}'")
+            if hasattr(self, 'endpoint') and self.endpoint:
+                print(f"⚠️ Retaining existing valid endpoint '{self.endpoint}' against null payload update.")
+                data['endpoint'] = self.endpoint
+            else:
+                print("⚠️ Ignoring voice_server_update payload with null/empty endpoint...")
+                return
+
+        clean_ep = data['endpoint'].replace(':8443', '').strip()
+        print(f"🔧 Valid voice endpoint set: '{clean_ep}'")
         data['endpoint'] = clean_ep
         await super().on_voice_server_update(data)
 
