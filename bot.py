@@ -195,9 +195,12 @@ async def join(ctx: discord.ApplicationContext):
         except Exception:
             pass
             
-        await channel.connect(timeout=30.0, reconnect=True)
+        print(f"🔄 Attempting to connect to voice channel: {channel.name} (Guild: {channel.guild.name})...")
+        vc = await channel.connect(timeout=60.0, reconnect=True, self_deaf=True)
+        print(f"✅ Connected to voice channel {channel.name} successfully!")
         await ctx.respond(f"✅ Joined **{channel.name}**")
     except Exception as e:
+        print(f"❌ Exception during voice connection to {channel.name}:")
         traceback.print_exc()
         await ctx.respond(f"❌ Failed to join voice channel: {format_error(e)}")
 
@@ -229,7 +232,9 @@ async def record(ctx: discord.ApplicationContext):
                 await asyncio.sleep(0.5)
             except Exception:
                 pass
-            vc = await channel.connect(timeout=30.0, reconnect=True)
+            print(f"🔄 Attempting voice connection for recording: {channel.name}...")
+            vc = await channel.connect(timeout=60.0, reconnect=True, self_deaf=True)
+            print(f"✅ Voice connected for recording: {channel.name}")
             
         if not vc or not vc.is_connected():
             await ctx.respond("❌ Could not establish a voice connection to the channel.")
