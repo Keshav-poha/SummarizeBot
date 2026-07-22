@@ -159,10 +159,10 @@ async def on_ready():
 
 class DiscordVoiceClient(discord.VoiceClient):
     """
-    Custom VoiceClient that caches the voice server endpoint from the gateway
-    payload and injects it into self.endpoint before the websocket connects.
-    This is required because Pycord 2.6.x does not always store the endpoint
-    correctly when Discord sends :8443 port-suffixed endpoints.
+    Custom VoiceClient that caches the voice server endpoint (including port)
+    and injects it into self.endpoint before the websocket connects.
+    Discord Mumbai region uses port 8443 for WSS - keeping the port in the
+    endpoint ensures the correct wss://host:8443/?v=4 URL is built.
     """
     def __init__(self, client, channel):
         super().__init__(client, channel)
@@ -175,14 +175,15 @@ class DiscordVoiceClient(discord.VoiceClient):
         if data and isinstance(data, dict):
             ep = data.get('endpoint')
             if ep and isinstance(ep, str) and ep.strip():
-                # Cache the cleaned endpoint for use in connect_websocket
-                self._cached_endpoint = ep.replace(':8443', '').strip()
-                data['endpoint'] = self._cached_endpoint
-                print(f"🔧 Voice endpoint cached: '{ep}' -> '{self._cached_endpoint}'", flush=True)
+                # Cache the endpoint AS-IS (including :8443 port)
+                # Pycord will use self.endpoint to build wss://{endpoint}/?v=4
+                # so we need the port included for correct WSS connection
+                self._cached_endpoint = ep.strip()
+                print(f"🔧 Voice endpoint cached (with port): '{self._cached_endpoint}'", flush=True)
         await super().on_voice_server_update(data)
 
     async def connect_websocket(self):
-        """Injects the cached endpoint into self.endpoint before Pycord builds the wss:// URL."""
+        """Injects the cached endpoint (with port) into self.endpoint before Pycord builds the wss:// URL."""
         # Wait up to 5s for on_voice_server_update to populate the cached endpoint
         for _ in range(50):
             if self._cached_endpoint:
@@ -190,9 +191,10 @@ class DiscordVoiceClient(discord.VoiceClient):
             await asyncio.sleep(0.1)
 
         if self._cached_endpoint:
-            # Force-set self.endpoint so Pycord builds the correct wss:// URL
+            # Force-set self.endpoint WITH the port so Pycord builds correct URL:
+            # wss://c-bom11-2eef0ae0.discord.media:8443/?v=4  (NOT port 443!)
             self.endpoint = self._cached_endpoint
-            print(f"🌐 Injected voice endpoint '{self.endpoint}' into VoiceClient", flush=True)
+            print(f"🌐 Injected voice endpoint '{self.endpoint}' -> wss://{self.endpoint}/?v=4", flush=True)
         else:
             print("❌ No voice server endpoint received from Discord Gateway.", flush=True)
             raise asyncio.TimeoutError("Discord Gateway did not send a voice server endpoint.")
