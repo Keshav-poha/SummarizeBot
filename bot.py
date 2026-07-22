@@ -12,9 +12,7 @@ import audio_processor
 config.validate_config()
 
 # Configure Discord bot gateway intents
-intents = discord.Intents.default()
-intents.message_content = True
-intents.voice_states = True  # Explicitly enable voice states tracking
+intents = discord.Intents.all()
 bot = discord.Bot(intents=intents)
 
 # Keep track of active recording sessions
@@ -195,8 +193,17 @@ async def record(ctx: discord.ApplicationContext):
     # Defer interaction to prevent Discord 3-second timeout
     await ctx.defer()
         
-    # Connect to the voice channel if not already connected
+    channel = ctx.author.voice.channel
     vc = ctx.voice_client
+    
+    # If a voice client exists but is not connected, clean it up
+    if vc and not vc.is_connected():
+        try:
+            await vc.disconnect(force=True)
+        except Exception:
+            pass
+        vc = None
+        
     try:
         if not vc:
             # Clear any stale/ghost voice state before connecting
@@ -205,8 +212,12 @@ async def record(ctx: discord.ApplicationContext):
                 await asyncio.sleep(0.5)
             except Exception:
                 pass
-            vc = await ctx.author.voice.channel.connect(timeout=30.0, reconnect=True)
+            vc = await channel.connect(timeout=30.0, reconnect=True)
             
+        if not vc or not vc.is_connected():
+            await ctx.respond("❌ Could not establish a voice connection to the channel.")
+            return
+
         if vc.recording:
             await ctx.respond("⚠️ Already recording in this voice channel.")
             return
