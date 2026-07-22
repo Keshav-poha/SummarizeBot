@@ -75,6 +75,7 @@ echo -e "${CYAN}Installing pip, setuptools, and CPU-optimized PyTorch (saves RAM
 pip install --upgrade pip
 pip install "setuptools<82.0.0" wheel
 pip install torch --index-url https://download.pytorch.org/whl/cpu
+pip install --no-cache-dir --force-reinstall PyNaCl
 pip install --no-build-isolation -r requirements.txt
 
 # 4. Print Bot Invite Link

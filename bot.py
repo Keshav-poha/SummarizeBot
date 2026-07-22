@@ -154,6 +154,23 @@ async def on_ready():
         
     print("Slash commands registered successfully. Ready to record!")
 
+@bot.event
+async def on_voice_state_update(member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):
+    """Logs when the bot joins or disconnects from voice channels."""
+    if member.id == bot.user.id:
+        if before.channel is not None and after.channel is None:
+            print(f"⚠️ Bot disconnected from voice channel '{before.channel.name}' (Guild: {before.channel.guild.name})")
+        elif before.channel is None and after.channel is not None:
+            print(f"🔊 Bot joined voice channel '{after.channel.name}' (Guild: {after.channel.guild.name})")
+        elif before.channel != after.channel:
+            print(f"🔀 Bot moved from '{before.channel.name}' to '{after.channel.name}'")
+
+@bot.event
+async def on_error(event_method: str, *args, **kwargs):
+    """Logs detailed tracebacks for unhandled events."""
+    print(f"❌ Exception in event handler '{event_method}':")
+    traceback.print_exc()
+
 @bot.slash_command(name="join", description="Connect the bot to your current voice channel.")
 async def join(ctx: discord.ApplicationContext):
     if not ctx.author.voice:
