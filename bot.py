@@ -242,18 +242,12 @@ async def join(ctx: discord.ApplicationContext):
         if ctx.voice_client:
             try:
                 await ctx.voice_client.disconnect(force=True)
+                await asyncio.sleep(1.0)  # Brief wait after disconnect before reconnecting
             except Exception:
                 pass
-        
-        # Clear any stale/ghost voice connections from previous crashes or restarts
-        try:
-            await ctx.guild.change_voice_state(channel=None)
-            await asyncio.sleep(0.5)
-        except Exception:
-            pass
             
         print(f"🔄 Attempting to connect to voice channel: {channel.name} (Guild: {channel.guild.name})...")
-        vc = await channel.connect(cls=DiscordVoiceClient, timeout=60.0, reconnect=True)
+        vc = await channel.connect(cls=DiscordVoiceClient, timeout=60.0, reconnect=False)
         print(f"✅ Connected to voice channel {channel.name} successfully!")
         await ctx.respond(f"✅ Joined **{channel.name}**")
     except Exception as e:
@@ -283,14 +277,8 @@ async def record(ctx: discord.ApplicationContext):
         
     try:
         if not vc:
-            # Clear any stale/ghost voice state before connecting
-            try:
-                await ctx.guild.change_voice_state(channel=None)
-                await asyncio.sleep(0.5)
-            except Exception:
-                pass
             print(f"🔄 Attempting voice connection for recording: {channel.name}...")
-            vc = await channel.connect(cls=DiscordVoiceClient, timeout=60.0, reconnect=True)
+            vc = await channel.connect(cls=DiscordVoiceClient, timeout=60.0, reconnect=False)
             print(f"✅ Voice connected for recording: {channel.name}")
             
         if not vc or not vc.is_connected():
