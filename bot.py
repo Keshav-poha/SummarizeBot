@@ -273,7 +273,7 @@ async def record(ctx: discord.ApplicationContext):
             await ctx.respond("❌ Could not establish a voice connection to the channel.")
             return
 
-        if vc.recording:
+        if vc.is_recording():
             await ctx.respond("⚠️ Already recording in this voice channel.")
             return
             
@@ -300,7 +300,7 @@ async def record(ctx: discord.ApplicationContext):
 @bot.slash_command(name="stop", description="Stop recording, save audio, and generate transcript.")
 async def stop(ctx: discord.ApplicationContext):
     vc = ctx.voice_client
-    if not vc or not vc.recording:
+    if not vc or not vc.is_recording():
         await ctx.respond("❌ The bot is not currently recording in this server.")
         return
         
@@ -316,7 +316,7 @@ async def leave(ctx: discord.ApplicationContext):
 
     vc = ctx.voice_client
     if vc:
-        if vc.recording:
+        if vc.is_recording():
             vc.stop_recording()
         try:
             await vc.disconnect(force=True)
