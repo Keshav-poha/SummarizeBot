@@ -154,6 +154,21 @@ async def on_ready():
         
     print("Slash commands registered successfully. Ready to record!")
 
+class DebugVoiceClient(discord.VoiceClient):
+    """Custom VoiceClient subclass that prints stack traces when disconnect is triggered."""
+    async def disconnect(self, *, force: bool = False) -> None:
+        print(f"⚠️ DebugVoiceClient: disconnect() triggered (force={force})!")
+        traceback.print_stack()
+        await super().disconnect(force=force)
+
+    async def on_voice_state_update(self, data) -> None:
+        print(f"🔊 DebugVoiceClient: voice_state_update payload: {data}")
+        await super().on_voice_state_update(data)
+
+    async def on_voice_server_update(self, data) -> None:
+        print(f"🔊 DebugVoiceClient: voice_server_update payload: {data}")
+        await super().on_voice_server_update(data)
+
 @bot.event
 async def on_voice_state_update(member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):
     """Logs when the bot joins or disconnects from voice channels."""
@@ -196,7 +211,7 @@ async def join(ctx: discord.ApplicationContext):
             pass
             
         print(f"🔄 Attempting to connect to voice channel: {channel.name} (Guild: {channel.guild.name})...")
-        vc = await channel.connect(timeout=60.0, reconnect=True)
+        vc = await channel.connect(cls=DebugVoiceClient, timeout=60.0, reconnect=True)
         print(f"✅ Connected to voice channel {channel.name} successfully!")
         await ctx.respond(f"✅ Joined **{channel.name}**")
     except Exception as e:
@@ -233,7 +248,7 @@ async def record(ctx: discord.ApplicationContext):
             except Exception:
                 pass
             print(f"🔄 Attempting voice connection for recording: {channel.name}...")
-            vc = await channel.connect(timeout=60.0, reconnect=True)
+            vc = await channel.connect(cls=DebugVoiceClient, timeout=60.0, reconnect=True)
             print(f"✅ Voice connected for recording: {channel.name}")
             
         if not vc or not vc.is_connected():
