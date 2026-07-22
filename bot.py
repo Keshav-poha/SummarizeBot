@@ -155,10 +155,9 @@ async def on_ready():
     print("Slash commands registered successfully. Ready to record!")
 
 class DebugVoiceClient(discord.VoiceClient):
-    """Custom VoiceClient subclass that prints stack traces when disconnect is triggered."""
+    """Custom VoiceClient subclass that fixes Discord :8443 endpoint SSL bugs and logs lifecycle."""
     async def disconnect(self, *, force: bool = False) -> None:
         print(f"⚠️ DebugVoiceClient: disconnect() triggered (force={force})!")
-        traceback.print_stack()
         await super().disconnect(force=force)
 
     async def on_voice_state_update(self, data) -> None:
@@ -166,7 +165,12 @@ class DebugVoiceClient(discord.VoiceClient):
         await super().on_voice_state_update(data)
 
     async def on_voice_server_update(self, data) -> None:
-        print(f"🔊 DebugVoiceClient: voice_server_update payload: {data}")
+        print(f"🔊 DebugVoiceClient: raw voice_server_update payload: {data}")
+        if data and 'endpoint' in data and data['endpoint']:
+            # Strip port suffix (e.g. :8443) from endpoint so aiohttp SSL validation succeeds
+            raw_endpoint = data['endpoint']
+            data['endpoint'] = raw_endpoint.split(':')[0]
+            print(f"🔧 Cleaned voice endpoint: '{raw_endpoint}' -> '{data['endpoint']}'")
         await super().on_voice_server_update(data)
 
 @bot.event
