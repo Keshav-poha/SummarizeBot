@@ -22,7 +22,7 @@ bot = discord.Bot(intents=intents)
 # Format: { guild_id: (voice_client, start_time) }
 recording_sessions = {}
 
-async def once_done(sink: discord.sinks.Sink, channel: discord.TextChannel):
+async def once_done(sink: discord.sinks.Sink, *, channel: discord.TextChannel, **kwargs):
     """
     Callback function triggered when the recording stops.
     Dispatches audio processing tasks asynchronously to avoid blocking the main thread.
@@ -162,6 +162,14 @@ with _warnings.catch_warnings():
     _warnings.simplefilter("ignore", DeprecationWarning)
     _VoiceClientBase = discord.VoiceClient
 
+class RecordingSink(discord.sinks.WaveSink):
+    """
+    WaveSink subclass compatible with Pycord 2.7+'s SinkEventRouter.
+    The new router requires __sink_listeners__ on the sink object;
+    an empty dict means no custom event handlers (the sink uses write() as usual).
+    """
+    __sink_listeners__ = {}
+
 class DiscordVoiceClient(_VoiceClientBase):
     """
     Custom VoiceClient with DAVE support (Pycord 2.7+ library) and full recording API.
@@ -280,12 +288,15 @@ async def record(ctx: discord.ApplicationContext):
         # Store the session start time
         recording_sessions[ctx.guild.id] = (vc, time.time())
         
-        # Start recording (Using WaveSink as it's the most stable format)
-        vc.start_recording(
-            discord.sinks.WaveSink(),
-            once_done,
-            ctx.channel
-        )
+        # Start recording - use keyword arg for channel (positional args deprecated in 2.7)
+        import warnings as _w
+        with _w.catch_warnings():
+            _w.simplefilter("ignore")
+            vc.start_recording(
+                RecordingSink(),
+                once_done,
+                channel=ctx.channel
+            )
         
         # Send a response explaining recording has started and notifying users (privacy)
         await ctx.respond(
