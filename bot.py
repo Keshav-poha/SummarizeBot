@@ -200,7 +200,16 @@ class DiscordVoiceClient(discord.VoiceClient):
             raise asyncio.TimeoutError("Discord Gateway did not send a voice server endpoint.")
 
         return await super().connect_websocket()
-        await super().on_voice_server_update(data)
+
+    async def poll_voice_ws(self, reconnect: bool) -> None:
+        """Wraps poll_voice_ws to log the exception that causes each disconnect."""
+        try:
+            await super().poll_voice_ws(reconnect)
+        except Exception as e:
+            print(f"❌ poll_voice_ws EXCEPTION → {type(e).__name__}: {e}", flush=True)
+            import traceback as _tb
+            _tb.print_exc()
+            raise
 
 @bot.event
 async def on_voice_state_update(member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):
