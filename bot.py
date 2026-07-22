@@ -22,26 +22,11 @@ bot = discord.Bot(intents=intents)
 # Format: { guild_id: (voice_client, start_time) }
 recording_sessions = {}
 
-async def once_done(sink: discord.sinks.Sink, *, channel: discord.TextChannel, **kwargs):
+async def process_recording_results(sink, channel: discord.TextChannel, duration_str: str, guild_id: int):
     """
-    Callback function triggered when the recording stops.
-    Dispatches audio processing tasks asynchronously to avoid blocking the main thread.
+    Processes and posts recording results to the text channel.
+    Called after stop_recording triggers the callback.
     """
-    guild_id = channel.guild.id
-    session_info = recording_sessions.pop(guild_id, None)
-    
-    # Calculate duration
-    duration_str = "Unknown duration"
-    if session_info:
-        _, start_time = session_info
-        duration = time.time() - start_time
-        mins, secs = divmod(int(duration), 60)
-        duration_str = f"{mins}m {secs}s"
-        
-    # Disconnect the bot from the voice channel
-    if sink.vc:
-        await sink.vc.disconnect()
-        
     if not sink.audio_data:
         await channel.send("⚠️ Recording stopped. No audio was captured (nobody spoke).")
         return
@@ -53,7 +38,7 @@ async def once_done(sink: discord.sinks.Sink, *, channel: discord.TextChannel, *
     
     # Offload audio processing and transcription to a thread pool executor
     # to prevent blocking the Discord event loop.
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     try:
         combined_path, transcripts = await loop.run_in_executor(
             None, 
@@ -285,18 +270,40 @@ async def record(ctx: discord.ApplicationContext):
             await ctx.respond("⚠️ Already recording in this voice channel.")
             return
             
-        # Store the session start time
-        recording_sessions[ctx.guild.id] = (vc, time.time())
+        # Store the session start time and text channel for the callback
+        recording_sessions[ctx.guild.id] = {
+            'vc': vc,
+            'start_time': time.time(),
+            'channel': ctx.channel,
+        }
         
-        # Start recording - use keyword arg for channel (positional args deprecated in 2.7)
-        import warnings as _w
-        with _w.catch_warnings():
-            _w.simplefilter("ignore")
-            vc.start_recording(
-                RecordingSink(),
-                once_done,
-                channel=ctx.channel
-            )
+        # Create a closure-based callback for Pycord 2.7+
+        # In 2.7 the callback signature changed to callback(exception)
+        # so we capture the sink and channel via closure instead of args
+        text_channel = ctx.channel
+        guild_id = ctx.guild.id
+        recording_sink = RecordingSink()
+        
+        async def recording_finished(exception):
+            """Closure callback — captures sink, channel, guild_id from enclosing scope."""
+            if exception:
+                print(f"❌ Recording error: {exception}", flush=True)
+                traceback.print_exc()
+            
+            session = recording_sessions.pop(guild_id, None)
+            duration_str = "Unknown duration"
+            if session:
+                duration = time.time() - session['start_time']
+                mins, secs = divmod(int(duration), 60)
+                duration_str = f"{mins}m {secs}s"
+            
+            await process_recording_results(recording_sink, text_channel, duration_str, guild_id)
+        
+        # Start recording with the new Pycord 2.7 API
+        vc.start_recording(
+            recording_sink,
+            recording_finished,
+        )
         
         # Send a response explaining recording has started and notifying users (privacy)
         await ctx.respond(
@@ -315,27 +322,26 @@ async def stop(ctx: discord.ApplicationContext):
         await ctx.respond("❌ The bot is not currently recording in this server.")
         return
         
-    # Defer interaction immediately to prevent timeout
-    await ctx.defer()
+    # Respond first, then stop recording (stop_recording triggers the async callback)
     await ctx.respond("⏳ Stopping the recording and beginning audio transcription. Please wait...")
     vc.stop_recording()
 
 @bot.slash_command(name="leave", description="Disconnect the bot from the voice channel.")
 async def leave(ctx: discord.ApplicationContext):
-    # Defer interaction immediately to prevent timeout
-    await ctx.defer()
-
     vc = ctx.voice_client
-    if vc:
+    if not vc:
+        await ctx.respond("❌ The bot is not in a voice channel.")
+        return
+        
+    # Defer interaction to prevent timeout during disconnect
+    await ctx.defer()
+    
+    try:
         if vc.is_recording():
             vc.stop_recording()
-        try:
-            await vc.disconnect(force=True)
-        except Exception:
-            pass
-        
-    try:
-        await ctx.guild.change_voice_state(channel=None)
+        await vc.disconnect(force=True)
+        # Clean up any leftover recording session data
+        recording_sessions.pop(ctx.guild.id, None)
         await ctx.respond("🚪 Disconnected from the voice channel.")
     except Exception as e:
         traceback.print_exc()

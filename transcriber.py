@@ -9,12 +9,12 @@ _model_instance = None
 def get_device():
     """
     Detects the best available device for Whisper execution.
-    Prefers MPS (Apple Silicon GPU) or CUDA (NVIDIA GPU) over CPU.
+    Prefers CUDA (NVIDIA GPU) or MPS (Apple Silicon GPU) over CPU.
     """
-    if torch.backends.mps.is_available():
-        return "mps"
-    elif torch.cuda.is_available():
+    if torch.cuda.is_available():
         return "cuda"
+    if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+        return "mps"
     return "cpu"
 
 def load_model():
