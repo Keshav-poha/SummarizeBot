@@ -288,7 +288,7 @@ async def record(ctx: discord.ApplicationContext):
         guild_id = ctx.guild.id
         recording_sink = RecordingSink()
         
-        async def recording_finished(exception):
+        def recording_finished(exception):
             """Closure callback — captures sink, channel, guild_id from enclosing scope."""
             if exception:
                 print(f"❌ Recording error: {exception}", flush=True)
@@ -301,7 +301,10 @@ async def record(ctx: discord.ApplicationContext):
                 mins, secs = divmod(int(duration), 60)
                 duration_str = f"{mins}m {secs}s"
             
-            await process_recording_results(recording_sink, text_channel, duration_str, guild_id)
+            # Pycord calls this callback synchronously, so we must schedule the async processing
+            bot.loop.create_task(
+                process_recording_results(recording_sink, text_channel, duration_str, guild_id)
+            )
         
         # Start recording with the new Pycord 2.7 API
         vc.start_recording(
