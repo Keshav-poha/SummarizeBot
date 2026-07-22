@@ -12,7 +12,10 @@ import audio_processor
 config.validate_config()
 
 # Configure Discord bot gateway intents
-intents = discord.Intents.all()
+intents = discord.Intents.default()
+intents.message_content = True
+intents.voice_states = True
+intents.guilds = True
 bot = discord.Bot(intents=intents)
 
 # Keep track of active recording sessions
@@ -157,22 +160,24 @@ async def on_ready():
 class DebugVoiceClient(discord.VoiceClient):
     """Custom VoiceClient subclass that guarantees valid endpoints and cleans :8443 suffixes."""
     async def disconnect(self, *, force: bool = False) -> None:
-        print(f"⚠️ DebugVoiceClient: disconnect() triggered (force={force})!")
+        print(f"⚠️ DebugVoiceClient: disconnect() triggered (force={force})!", flush=True)
         await super().disconnect(force=force)
 
     async def connect_websocket(self):
         """Ensures endpoint is valid before attempting websocket connection."""
-        print(f"🔌 DebugVoiceClient: preparing websocket for endpoint='{getattr(self, 'endpoint', None)}'")
+        print(f"🔌 DebugVoiceClient: preparing websocket for endpoint='{getattr(self, 'endpoint', None)}'", flush=True)
         # Wait up to 5s for endpoint to be populated by gateway
         for _ in range(50):
             if hasattr(self, 'endpoint') and self.endpoint and isinstance(self.endpoint, str) and self.endpoint.strip():
                 break
             await asyncio.sleep(0.1)
 
-        if hasattr(self, 'endpoint') and self.endpoint:
-            self.endpoint = self.endpoint.replace(':8443', '').strip()
-            print(f"🌐 Connecting to voice websocket at: wss://{self.endpoint}/?v=4")
+        if not hasattr(self, 'endpoint') or not self.endpoint or not isinstance(self.endpoint, str) or not self.endpoint.strip():
+            print("❌ DebugVoiceClient error: Discord Gateway did not provide a voice server endpoint.", flush=True)
+            raise asyncio.TimeoutError("Voice server endpoint was not provided by Discord Gateway.")
 
+        self.endpoint = self.endpoint.replace(':8443', '').strip()
+        print(f"🌐 Connecting to voice websocket at: wss://{self.endpoint}/?v=4", flush=True)
         return await super().connect_websocket()
 
     async def on_voice_state_update(self, data) -> None:
