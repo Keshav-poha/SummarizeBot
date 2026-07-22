@@ -159,6 +159,9 @@ class RecordingSink(discord.sinks.WaveSink):
     def walk_children(self):
         yield from []
 
+    def is_opus(self):
+        return False
+
 class DiscordVoiceClient(_VoiceClientBase):
     """
     Custom VoiceClient with DAVE support (Pycord 2.7+ library) and full recording API.
