@@ -157,11 +157,16 @@ async def on_ready():
         
     print("Slash commands registered successfully. Ready to record!")
 
-class DiscordVoiceClient(discord.voice.VoiceClient):
+import warnings as _warnings
+with _warnings.catch_warnings():
+    _warnings.simplefilter("ignore", DeprecationWarning)
+    _VoiceClientBase = discord.VoiceClient
+
+class DiscordVoiceClient(_VoiceClientBase):
     """
-    Custom VoiceClient using Pycord 2.7+'s DAVE-capable discord.voice.VoiceClient.
-    Also injects the full voice server endpoint (including :8443 port) before
-    the websocket connects, which is required for Discord's Mumbai voice region.
+    Custom VoiceClient with DAVE support (Pycord 2.7+ library) and full recording API.
+    Uses discord.VoiceClient which has start_recording/stop_recording/recording,
+    and injects the voice server endpoint (including :8443 port for Mumbai region).
     """
     def __init__(self, client, channel):
         super().__init__(client, channel)
