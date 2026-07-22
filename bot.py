@@ -157,41 +157,47 @@ async def on_ready():
         
     print("Slash commands registered successfully. Ready to record!")
 
-class DebugVoiceClient(discord.VoiceClient):
-    """Custom VoiceClient subclass that guarantees valid endpoints and cleans :8443 suffixes."""
-    async def disconnect(self, *, force: bool = False) -> None:
-        print(f"⚠️ DebugVoiceClient: disconnect() triggered (force={force})!", flush=True)
-        await super().disconnect(force=force)
-
-    async def connect_websocket(self):
-        """Ensures endpoint is valid before attempting websocket connection."""
-        print(f"🔌 DebugVoiceClient: preparing websocket for endpoint='{getattr(self, 'endpoint', None)}'", flush=True)
-        # Wait up to 5s for endpoint to be populated by gateway
-        for _ in range(50):
-            if hasattr(self, 'endpoint') and self.endpoint and isinstance(self.endpoint, str) and self.endpoint.strip():
-                break
-            await asyncio.sleep(0.1)
-
-        if not hasattr(self, 'endpoint') or not self.endpoint or not isinstance(self.endpoint, str) or not self.endpoint.strip():
-            print("❌ DebugVoiceClient error: Discord Gateway did not provide a voice server endpoint.", flush=True)
-            raise asyncio.TimeoutError("Voice server endpoint was not provided by Discord Gateway.")
-
-        self.endpoint = self.endpoint.replace(':8443', '').strip()
-        print(f"🌐 Connecting to voice websocket at: wss://{self.endpoint}/?v=4", flush=True)
-        return await super().connect_websocket()
+class DiscordVoiceClient(discord.VoiceClient):
+    """
+    Custom VoiceClient that caches the voice server endpoint from the gateway
+    payload and injects it into self.endpoint before the websocket connects.
+    This is required because Pycord 2.6.x does not always store the endpoint
+    correctly when Discord sends :8443 port-suffixed endpoints.
+    """
+    def __init__(self, client, channel):
+        super().__init__(client, channel)
+        self._cached_endpoint = None
 
     async def on_voice_state_update(self, data) -> None:
-        print(f"🔊 DebugVoiceClient: voice_state_update payload: {data}")
         await super().on_voice_state_update(data)
 
     async def on_voice_server_update(self, data) -> None:
-        print(f"🔊 DebugVoiceClient: raw voice_server_update payload: {data}")
         if data and isinstance(data, dict):
             ep = data.get('endpoint')
             if ep and isinstance(ep, str) and ep.strip():
-                clean_ep = ep.replace(':8443', '').strip()
-                data['endpoint'] = clean_ep
-                print(f"🔧 Cleaned voice_server_update endpoint: '{ep}' -> '{clean_ep}'")
+                # Cache the cleaned endpoint for use in connect_websocket
+                self._cached_endpoint = ep.replace(':8443', '').strip()
+                data['endpoint'] = self._cached_endpoint
+                print(f"🔧 Voice endpoint cached: '{ep}' -> '{self._cached_endpoint}'", flush=True)
+        await super().on_voice_server_update(data)
+
+    async def connect_websocket(self):
+        """Injects the cached endpoint into self.endpoint before Pycord builds the wss:// URL."""
+        # Wait up to 5s for on_voice_server_update to populate the cached endpoint
+        for _ in range(50):
+            if self._cached_endpoint:
+                break
+            await asyncio.sleep(0.1)
+
+        if self._cached_endpoint:
+            # Force-set self.endpoint so Pycord builds the correct wss:// URL
+            self.endpoint = self._cached_endpoint
+            print(f"🌐 Injected voice endpoint '{self.endpoint}' into VoiceClient", flush=True)
+        else:
+            print("❌ No voice server endpoint received from Discord Gateway.", flush=True)
+            raise asyncio.TimeoutError("Discord Gateway did not send a voice server endpoint.")
+
+        return await super().connect_websocket()
         await super().on_voice_server_update(data)
 
 @bot.event
@@ -236,7 +242,7 @@ async def join(ctx: discord.ApplicationContext):
             pass
             
         print(f"🔄 Attempting to connect to voice channel: {channel.name} (Guild: {channel.guild.name})...")
-        vc = await channel.connect(cls=DebugVoiceClient, timeout=60.0, reconnect=True)
+        vc = await channel.connect(cls=DiscordVoiceClient, timeout=60.0, reconnect=True)
         print(f"✅ Connected to voice channel {channel.name} successfully!")
         await ctx.respond(f"✅ Joined **{channel.name}**")
     except Exception as e:
@@ -273,7 +279,7 @@ async def record(ctx: discord.ApplicationContext):
             except Exception:
                 pass
             print(f"🔄 Attempting voice connection for recording: {channel.name}...")
-            vc = await channel.connect(cls=DebugVoiceClient, timeout=60.0, reconnect=True)
+            vc = await channel.connect(cls=DiscordVoiceClient, timeout=60.0, reconnect=True)
             print(f"✅ Voice connected for recording: {channel.name}")
             
         if not vc or not vc.is_connected():
