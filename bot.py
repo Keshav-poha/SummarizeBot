@@ -2,6 +2,7 @@ import os
 import asyncio
 import time
 import tempfile
+import traceback
 import discord
 
 import config
@@ -60,6 +61,7 @@ async def once_done(sink: discord.sinks.Sink, channel: discord.TextChannel):
             sink.encoding
         )
     except Exception as e:
+        traceback.print_exc()
         await processing_msg.edit(content=f"❌ An error occurred during audio processing: {e}")
         return
         
@@ -120,6 +122,21 @@ async def once_done(sink: discord.sinks.Sink, channel: discord.TextChannel):
 @bot.event
 async def on_ready():
     print(f"🤖 Bot is online as {bot.user} (ID: {bot.user.id})")
+    
+    # Ensure Opus audio library is loaded on Linux environments
+    if not discord.opus.is_loaded():
+        try:
+            discord.opus.load_opus("libopus.so.0")
+            print("🔊 Opus library loaded successfully.")
+        except Exception:
+            try:
+                discord.opus.load_opus("libopus.so")
+                print("🔊 Opus library loaded successfully.")
+            except Exception as e:
+                print(f"⚠️ Warning: Could not auto-load Opus library: {e}")
+    else:
+        print("🔊 Opus library is loaded.")
+        
     print("Slash commands registered successfully. Ready to record!")
 
 @bot.slash_command(name="join", description="Connect the bot to your current voice channel.")
@@ -139,6 +156,7 @@ async def join(ctx: discord.ApplicationContext):
             await channel.connect()
         await ctx.respond(f"✅ Joined **{channel.name}**")
     except Exception as e:
+        traceback.print_exc()
         await ctx.respond(f"❌ Failed to join voice channel: {e}")
 
 @bot.slash_command(name="record", description="Start recording the voice channel.")
@@ -177,6 +195,7 @@ async def record(ctx: discord.ApplicationContext):
             "The transcript and audio will be posted in this chat channel when the recording is stopped.*"
         )
     except Exception as e:
+        traceback.print_exc()
         await ctx.respond(f"❌ Failed to start recording: {e}")
 
 @bot.slash_command(name="stop", description="Stop recording, save audio, and generate transcript.")
@@ -209,6 +228,7 @@ async def leave(ctx: discord.ApplicationContext):
         await vc.disconnect()
         await ctx.respond("🚪 Disconnected from the voice channel.")
     except Exception as e:
+        traceback.print_exc()
         await ctx.respond(f"❌ Failed to disconnect: {e}")
 
 if __name__ == "__main__":

@@ -9,21 +9,21 @@ NC='\033[0m' # No Color
 BOLD='\033[1m'
 
 echo -e "${CYAN}${BOLD}====================================================${NC}"
-echo -e "${CYAN}${BOLD}    SummarizeBot Hetzner Linux Setup & Runner       ${NC}"
+echo -e "${CYAN}${BOLD}   SummarizeBot Contabo / Linux VPS Setup Script    ${NC}"
 echo -e "${CYAN}${BOLD}====================================================${NC}"
 
 # Ensure script is run on Debian/Ubuntu based system
 if ! command -v apt-get &> /dev/null; then
-    echo -e "${RED}❌ Error: This setup script requires a Debian/Ubuntu-based Linux distribution (standard for Hetzner Box).${NC}"
+    echo -e "${RED}❌ Error: This setup script requires a Debian/Ubuntu-based Linux distribution (standard on Contabo & Hetzner).${NC}"
     exit 1
 fi
 
 # 1. Update package index and install system dependencies
-echo -e "\n${CYAN}⚙️ Installing system dependencies (ffmpeg, python3, pip, venv, git)...${NC}"
+echo -e "\n${CYAN}⚙️ Installing system dependencies (ffmpeg, libopus, python3, pip, venv, git, build-essential)...${NC}"
 echo -e "${YELLOW}Note: This requires sudo privileges. You may be prompted for your password.${NC}"
 
 sudo apt-get update
-sudo apt-get install -y ffmpeg python3 python3-pip python3-venv git libffi-dev libnacl-dev build-essential
+sudo apt-get install -y ffmpeg python3 python3-pip python3-venv python3-dev git libffi-dev libnacl-dev libopus0 libopus-dev build-essential
 
 if [ $? -ne 0 ]; then
     echo -e "${RED}❌ Error: Failed to install system dependencies.${NC}"
@@ -70,8 +70,11 @@ fi
 echo -e "\n${CYAN}📦 Setting up Python virtual environment and dependencies...${NC}"
 python3 -m venv venv
 source venv/bin/activate
+
+echo -e "${CYAN}Installing pip, setuptools, and CPU-optimized PyTorch (saves RAM & disk)...${NC}"
 pip install --upgrade pip
 pip install "setuptools<82.0.0" wheel
+pip install torch --index-url https://download.pytorch.org/whl/cpu
 pip install --no-build-isolation -r requirements.txt
 
 # 4. Print Bot Invite Link
