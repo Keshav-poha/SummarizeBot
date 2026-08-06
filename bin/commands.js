@@ -1,8 +1,9 @@
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-const { joinVoiceChannel, EndBehaviorType, getVoiceConnection } = require('@discordjs/voice');
+const { joinVoiceChannel, EndBehaviorType, getVoiceConnection, createAudioPlayer, NoSubscriberBehavior, createAudioResource } = require('@discordjs/voice');
 const { exec } = require('child_process');
+const prism = require('prism-media');
 
 const recordingSessions = new Map();
 
@@ -24,6 +25,15 @@ exports.enter = async function(msg, client) {
         guildId: voiceChannel.guild.id,
         adapterCreator: voiceChannel.guild.voiceAdapterCreator,
         selfDeaf: false,
+        debug: true
+    });
+
+    connection.on('stateChange', (oldState, newState) => {
+        console.log(`Connection transitioned from ${oldState.status} to ${newState.status}`);
+    });
+    
+    connection.on('error', (error) => {
+        console.error('Voice Connection Error:', error);
     });
 
     recordingSessions.set(voiceChannel.guild.id, {
@@ -32,19 +42,36 @@ exports.enter = async function(msg, client) {
         startTime: Date.now()
     });
 
+    // Play a tiny bit of silence to kickstart the UDP connection
+    const player = createAudioPlayer({
+        behaviors: { noSubscriber: NoSubscriberBehavior.Play }
+    });
+    const silencePath = path.join(__dirname, '..', 'sounds', 'drop.mp3');
+    // If the file doesn't exist, we fallback to a silent Ogg or similar, but the user's repo had sounds/drop.mp3
+    if (fs.existsSync(silencePath)) {
+        player.play(createAudioResource(silencePath));
+        connection.subscribe(player);
+    }
+
     connection.receiver.speaking.on('start', (userId) => {
         const session = recordingSessions.get(voiceChannel.guild.id);
         if (!session) return;
         
         if (!session.userStreams.has(userId)) {
-            const audioStream = connection.receiver.subscribe(userId, {
+            const opusStream = connection.receiver.subscribe(userId, {
                 end: {
                     behavior: EndBehaviorType.Manual,
                 },
             });
 
+            const pcmStream = new prism.opus.Decoder({
+                rate: 48000,
+                channels: 2,
+                frameSize: 960,
+            });
+
             const { writeStream, tempFilePath } = createNewChunk(userId);
-            audioStream.pipe(writeStream);
+            opusStream.pipe(pcmStream).pipe(writeStream);
 
             session.userStreams.set(userId, tempFilePath);
             console.log(`Started recording user ${userId}`);
