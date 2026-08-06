@@ -1,29 +1,39 @@
-const Discord = require('discord.js');
-const client = new Discord.Client(
-    {intents: ["GUILD_MESSAGES", "GUILD_VOICE_STATES", "GUILDS"]}
-);
-
-const config = require('./config.json');
+const { Client, GatewayIntentBits } = require('discord.js');
+const dotenv = require('dotenv');
 const commands = require(`./bin/commands`);
 
-//in case the bot was not configured properly
-if(!config.PREFIX || !config.BOT_TOKEN) {
-    console.error("Error: The configuration file was configured improperly. Please ensure there are no spelling mistakes.");
+dotenv.config();
+
+const client = new Client({
+    intents: [
+        GatewayIntentBits.Guilds,
+        GatewayIntentBits.GuildVoiceStates,
+        GatewayIntentBits.GuildMessages,
+        GatewayIntentBits.MessageContent
+    ]
+});
+
+if(!process.env.DISCORD_TOKEN) {
+    console.error("Error: DISCORD_TOKEN is not set in the environment variables.");
     process.exit(1);
 }
 
-client.on('message', msg => {
-    if (msg.content.startsWith(config.PREFIX)) {
-        const commandBody = msg.content.substring(config.PREFIX.length).split(' ');
-        const channelName = commandBody[1];
+const PREFIX = process.env.PREFIX || '!';
+
+client.on('messageCreate', msg => {
+    if (msg.author.bot) return;
+
+    if (msg.content.startsWith(PREFIX)) {
+        const commandBody = msg.content.substring(PREFIX.length).split(' ');
         
-        if (commandBody[0] === ('enter') && commandBody[1]) commands.enter(msg, channelName);
-        if (commandBody[0] === ('exit')) commands.exit(msg);
+        if (commandBody[0] === 'record') commands.enter(msg, client);
+        if (commandBody[0] === 'stop') commands.exit(msg, client);
     }
 });
 
-client.login(config.BOT_TOKEN);
-
-client.on('ready', () => {
-    console.log(`\nONLINE\n`);
+client.once('ready', () => {
+    console.log(`\nONLINE - Logged in as ${client.user.tag}\n`);
+    console.log(`Requires @snazzah/davey installed for DAVE E2EE support.`);
 });
+
+client.login(process.env.DISCORD_TOKEN);
