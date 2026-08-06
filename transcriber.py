@@ -3,16 +3,13 @@ import os
 import json
 import torch
 import whisper
-import urllib.request
-import urllib.error
+from transformers import pipeline
 
 # Local Whisper model configuration
 WHISPER_MODEL = os.getenv("WHISPER_MODEL", "base")
-LLM_BASE_URL = os.getenv("LLM_BASE_URL", "http://localhost:11434/v1")
-LLM_API_KEY = os.getenv("LLM_API_KEY", "local-llm-key")
-LLM_MODEL = os.getenv("LLM_MODEL", "llama3")
 
-_model_instance = None
+_whisper_instance = None
+_summarizer_instance = None
 
 def get_device():
     if torch.cuda.is_available():
@@ -21,20 +18,32 @@ def get_device():
         return "mps"
     return "cpu"
 
-def load_model():
-    global _model_instance
-    if _model_instance is None:
+def load_whisper():
+    global _whisper_instance
+    if _whisper_instance is None:
         device = get_device()
         sys.stderr.write(f"Loading local Whisper model '{WHISPER_MODEL}' on device: {device}...\n")
-        _model_instance = whisper.load_model(WHISPER_MODEL, device=device)
+        _whisper_instance = whisper.load_model(WHISPER_MODEL, device=device)
         sys.stderr.write("Whisper model loaded successfully!\n")
-    return _model_instance
+    return _whisper_instance
+
+def load_summarizer():
+    global _summarizer_instance
+    if _summarizer_instance is None:
+        device = get_device()
+        sys.stderr.write(f"Loading local LLM Summarizer (facebook/bart-large-cnn) on device: {device}...\n")
+        # Initialize pipeline. If device="cuda" or "mps", pass device=0 or string
+        # pipeline accepts device index for cuda (0), or "mps" string, or "cpu" string
+        dev_arg = 0 if device == "cuda" else device
+        _summarizer_instance = pipeline("summarization", model="facebook/bart-large-cnn", device=dev_arg)
+        sys.stderr.write("LLM Summarizer loaded successfully!\n")
+    return _summarizer_instance
 
 def transcribe_file(file_path: str) -> str:
     if not os.path.exists(file_path):
         raise FileNotFoundError(f"Audio file not found: {file_path}")
         
-    model = load_model()
+    model = load_whisper()
     sys.stderr.write(f"Starting local transcription for: {os.path.basename(file_path)}\n")
     result = model.transcribe(file_path)
     return result.get("text", "").strip()
@@ -42,37 +51,26 @@ def transcribe_file(file_path: str) -> str:
 def summarize_text(text: str) -> str:
     if not text.strip():
         return "No text provided to summarize."
+    
+    # Check if text is extremely short (under 50 words)
+    if len(text.split()) < 50:
+        return "The meeting was too short to generate a meaningful summary."
 
-    sys.stderr.write(f"Summarizing text using LLM ({LLM_MODEL}) at {LLM_BASE_URL}...\n")
-    prompt = f"Please summarize the following meeting transcript accurately and concisely. Highlight any key action items if present:\n\n{text}"
+    summarizer = load_summarizer()
+    sys.stderr.write(f"Summarizing text natively using transformers pipeline...\n")
     
-    data = json.dumps({
-        "model": LLM_MODEL,
-        "messages": [
-            {"role": "system", "content": "You are a helpful meeting summarization assistant."},
-            {"role": "user", "content": prompt}
-        ],
-        "stream": False
-    }).encode('utf-8')
-    
-    req_url = f"{LLM_BASE_URL.rstrip('/')}/chat/completions"
-    headers = {
-        'Content-Type': 'application/json',
-        'Authorization': f'Bearer {LLM_API_KEY}'
-    }
-    
-    req = urllib.request.Request(req_url, data=data, headers=headers)
+    # Bart handles a max token limit. For simplicity, we truncate input if it's too long
+    # (Bart max length is 1024 tokens, which is roughly ~700-800 words)
+    # A robust solution would chunk it, but this is a solid start for most normal voice clips.
+    # We slice by characters (approx 4 chars per token -> 3000 chars)
+    truncated_text = text[:3500] 
     
     try:
-        with urllib.request.urlopen(req, timeout=120) as response:
-            response_data = json.loads(response.read().decode('utf-8'))
-            return response_data['choices'][0]['message']['content'].strip()
-    except urllib.error.URLError as e:
-        sys.stderr.write(f"Failed to connect to LLM API: {e}\n")
-        return "Summary failed: Could not reach the LLM API. Check your BASE_URL and API_KEY."
+        summary_result = summarizer(truncated_text, max_length=150, min_length=40, do_sample=False)
+        return summary_result[0]['summary_text']
     except Exception as e:
         sys.stderr.write(f"Error during summarization: {e}\n")
-        return f"Summary failed: {e}"
+        return f"Summary failed natively: {e}"
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
