@@ -73,7 +73,7 @@ exports.enter = async function(msg, client) {
             const { writeStream, tempFilePath } = createNewChunk(userId);
             opusStream.pipe(pcmStream).pipe(writeStream);
 
-            session.userStreams.set(userId, tempFilePath);
+            session.userStreams.set(userId, { tempFilePath, opusStream, writeStream });
             console.log(`Started recording user ${userId}`);
         }
     });
@@ -103,18 +103,25 @@ exports.exit = function (msg, client) {
     connection.destroy();
     recordingSessions.delete(voiceChannel.guild.id);
 
-    const files = Array.from(session.userStreams.values());
-    if (files.length === 0) {
+    const userFiles = [];
+    for (const [userId, streamData] of session.userStreams.entries()) {
+        userFiles.push(streamData.tempFilePath);
+        streamData.opusStream.destroy();
+        streamData.writeStream.end();
+    }
+
+    if (userFiles.length === 0) {
         return session.channel.send('⚠️ No audio was captured (nobody spoke).');
     }
 
-    // Merge all PCM files using FFmpeg
-    const outWav = path.join(os.tmpdir(), `merged_${Date.now()}.wav`);
-    
-    let ffmpegCmd = `ffmpeg -y `;
-    files.forEach(f => {
-        ffmpegCmd += `-f s16le -ar 48000 -ac 2 -i "${f}" `;
-    });
+    // Give Node.js a second to completely flush the PCM streams to the hard drive
+    setTimeout(() => {
+        const outWav = path.join(os.tmpdir(), `merged_${Date.now()}.wav`);
+        
+        let ffmpegCmd = `ffmpeg -y `;
+        userFiles.forEach(f => {
+            ffmpegCmd += `-f s16le -ar 48000 -ac 2 -i "${f}" `;
+        });
 
     if (files.length > 1) {
         ffmpegCmd += `-filter_complex amix=inputs=${files.length}:duration=longest `;
@@ -122,11 +129,11 @@ exports.exit = function (msg, client) {
     
     ffmpegCmd += `"${outWav}"`;
 
-    exec(ffmpegCmd, (error) => {
-        // Delete raw PCM files
-        files.forEach(f => {
-            try { fs.unlinkSync(f); } catch (e) {}
-        });
+        exec(ffmpegCmd, (error) => {
+            // Delete raw PCM files
+            userFiles.forEach(f => {
+                try { fs.unlinkSync(f); } catch (e) {}
+            });
 
         if (error) {
             console.error("FFmpeg error:", error);
@@ -180,4 +187,5 @@ exports.exit = function (msg, client) {
             }
         });
     });
+    }, 1000); // 1 second timeout
 };
