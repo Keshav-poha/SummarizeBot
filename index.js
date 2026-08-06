@@ -31,7 +31,7 @@ client.on('messageCreate', msg => {
     }
 });
 
-client.once('ready', () => {
+client.once('clientReady', () => {
     console.log(`\nONLINE - Logged in as ${client.user.tag}\n`);
     console.log(`Requires @snazzah/davey installed for DAVE E2EE support.`);
 });

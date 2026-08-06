@@ -136,7 +136,16 @@ exports.exit = function (msg, client) {
         session.channel.send('🎙️ Audio merged. Running local Whisper transcription and Ollama summarization...');
         
         const pythonScript = path.join(process.cwd(), 'transcriber.py');
-        const pythonCmd = os.platform() === 'win32' ? 'python' : 'python3';
+        
+        let pythonCmd = os.platform() === 'win32' ? 'python' : 'python3';
+        const venvWin = path.join(process.cwd(), 'venv', 'Scripts', 'python.exe');
+        const venvLin = path.join(process.cwd(), 'venv', 'bin', 'python');
+        
+        if (fs.existsSync(venvWin)) {
+            pythonCmd = `"${venvWin}"`;
+        } else if (fs.existsSync(venvLin)) {
+            pythonCmd = `"${venvLin}"`;
+        }
         
         exec(`${pythonCmd} "${pythonScript}" "${outWav}"`, (pyErr, stdout, stderr) => {
             try { fs.unlinkSync(outWav); } catch(e) {}
